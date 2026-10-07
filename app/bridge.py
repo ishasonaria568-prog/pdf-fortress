@@ -1,6 +1,6 @@
 """
 PDF Fortress — Bridge for Local API / Web Integration
-ISHU CYBERSECURITY
+Connects Express Server to Core PDF Engine
 """
 
 import os
@@ -12,32 +12,27 @@ import unittest
 import io
 from pathlib import Path
 
-# Add project root and vendor packages to sys.path
+# Add project root to sys.path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
-_vendor_path = _root / "python_packages"
-if _vendor_path.exists() and str(_vendor_path) not in sys.path:
-    sys.path.insert(0, str(_vendor_path))
 
-from app.core.pdf_protector import (
+from app.core import (
     protect_pdf,
     verify_protected_pdf,
+    get_pdf_info,
+    verify_existing_pdf,
+    calculate_password_strength,
     PDFProtectorError,
     MissingFileError,
     InvalidPDFError,
     CorruptedPDFError,
     EmptyPasswordError,
-    OutputFailureError,
+    OutputFileExistsError,
     SamePathOverwriteError,
+    OutputFailureError,
+    VerificationFailureError,
 )
-from app.core.validators import validate_input_pdf
-from app.core.security import calculate_password_strength
-
-try:
-    from pypdf import PdfReader, PdfWriter
-except ImportError:
-    from PyPDF2 import PdfReader, PdfWriter
 
 
 def handle_protect(payload: dict) -> dict:
@@ -59,7 +54,6 @@ def handle_protect(payload: dict) -> dict:
         in_file = tmp_path / input_name
         out_file = tmp_path / output_name
 
-        # Ensure safe write
         with open(in_file, "wb") as f:
             f.write(raw_bytes)
 
@@ -79,12 +73,6 @@ def handle_protect(payload: dict) -> dict:
             result["file_size"] = len(protected_bytes)
             result["output_filename"] = output_name
             result["input_filename"] = input_name
-            result["verification_checks"] = {
-                "output_exists": True,
-                "pdf_readable": True,
-                "page_count_preserved": True,
-                "protection_applied": True,
-            }
 
             return {"success": True, "data": result}
 
@@ -96,10 +84,14 @@ def handle_protect(payload: dict) -> dict:
             return {"success": False, "error": str(e), "error_type": "CorruptedPDFError"}
         except EmptyPasswordError as e:
             return {"success": False, "error": str(e), "error_type": "EmptyPasswordError"}
-        except OutputFailureError as e:
-            return {"success": False, "error": str(e), "error_type": "OutputFailureError"}
+        except OutputFileExistsError as e:
+            return {"success": False, "error": str(e), "error_type": "OutputFileExistsError"}
         except SamePathOverwriteError as e:
             return {"success": False, "error": str(e), "error_type": "SamePathOverwriteError"}
+        except OutputFailureError as e:
+            return {"success": False, "error": str(e), "error_type": "OutputFailureError"}
+        except VerificationFailureError as e:
+            return {"success": False, "error": str(e), "error_type": "VerificationFailureError"}
         except PDFProtectorError as e:
             return {"success": False, "error": str(e), "error_type": "PDFProtectorError"}
         except Exception as e:
@@ -115,34 +107,38 @@ def handle_verify_password(payload: dict) -> dict:
 
     try:
         raw_bytes = base64.b64decode(file_base64)
-        stream = io.BytesIO(raw_bytes)
-        reader = PdfReader(stream)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(raw_bytes)
+            tmp_path = tmp.name
 
-        if not reader.is_encrypted:
-            return {
-                "success": True,
-                "is_encrypted": False,
-                "unlocked": True,
-                "message": "File is not password protected.",
-                "page_count": len(reader.pages),
-            }
-
-        unlocked = reader.decrypt(password)
-        if unlocked:
-            return {
-                "success": True,
-                "is_encrypted": True,
-                "unlocked": True,
-                "page_count": len(reader.pages),
-                "message": "Password verified! Document successfully unlocked.",
-            }
-        else:
-            return {
-                "success": True,
-                "is_encrypted": True,
-                "unlocked": False,
-                "message": "Incorrect password. Document remains locked.",
-            }
+        try:
+            info = verify_existing_pdf(tmp_path, test_password=password)
+            if not info["is_encrypted"]:
+                return {
+                    "success": True,
+                    "is_encrypted": False,
+                    "unlocked": True,
+                    "message": "File is not password protected.",
+                    "page_count": info["pages"],
+                }
+            elif info["unlocked"]:
+                return {
+                    "success": True,
+                    "is_encrypted": True,
+                    "unlocked": True,
+                    "page_count": info["pages"],
+                    "message": "Password verified! Document successfully unlocked.",
+                }
+            else:
+                return {
+                    "success": True,
+                    "is_encrypted": True,
+                    "unlocked": False,
+                    "message": "Incorrect password. Document remains locked.",
+                }
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     except Exception as e:
         return {"success": False, "error": f"Failed to test PDF: {e}"}
@@ -155,57 +151,33 @@ def handle_inspect_pdf(payload: dict) -> dict:
 
     try:
         raw_bytes = base64.b64decode(file_base64)
-        if not raw_bytes.startswith(b"%PDF-"):
-            return {"success": False, "error": "The selected file is not a valid PDF. Missing %PDF header.", "error_type": "InvalidPDFError"}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(raw_bytes)
+            tmp_path = tmp.name
 
-        # Extract header version from first 20 bytes
-        header_line = raw_bytes[:20].decode("ascii", errors="ignore").splitlines()[0]
-        pdf_version = header_line.replace("%", "").strip() if header_line else "PDF-1.4"
-
-        stream = io.BytesIO(raw_bytes)
-        reader = PdfReader(stream)
-        is_encrypted = bool(reader.is_encrypted)
-        
-        metadata_dict = {}
-        page_count = 0
-        page_dim = None
-
-        if not is_encrypted:
-            page_count = len(reader.pages)
-            if page_count > 0:
-                p0 = reader.pages[0]
-                box = p0.mediabox
-                page_dim = f"{round(float(box.width))} x {round(float(box.height))} pt"
-
-            if reader.metadata:
-                m = reader.metadata
-                for k, v in [
-                    ("title", getattr(m, "title", None)),
-                    ("author", getattr(m, "author", None)),
-                    ("creator", getattr(m, "creator", None)),
-                    ("producer", getattr(m, "producer", None)),
-                    ("creation_date", str(getattr(m, "creation_date", None) or "")),
-                    ("modification_date", str(getattr(m, "modification_date", None) or "")),
-                ]:
-                    if v and str(v).strip():
-                        metadata_dict[k] = str(v).strip()
-
-        return {
-            "success": True,
-            "data": {
-                "is_pdf": True,
-                "is_readable": not is_encrypted or True,
-                "is_encrypted": is_encrypted,
-                "pdf_version": pdf_version,
-                "page_count": page_count,
-                "page_dimension": page_dim,
-                "size_bytes": len(raw_bytes),
-                "metadata": metadata_dict,
-                "has_metadata": len(metadata_dict) > 0,
+        try:
+            info = get_pdf_info(tmp_path)
+            return {
+                "success": True,
+                "data": {
+                    "is_pdf": True,
+                    "is_readable": info["is_readable"],
+                    "is_encrypted": info["is_encrypted"],
+                    "pdf_version": info["pdf_version"],
+                    "page_count": info["pages"],
+                    "size_bytes": info["size_bytes"],
+                    "metadata": info["metadata"],
+                    "has_metadata": any(v != "Not available" for v in info["metadata"].values()),
+                }
             }
-        }
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    except (InvalidPDFError, CorruptedPDFError) as e:
+        return {"success": False, "error": str(e), "error_type": type(e).__name__}
     except Exception as e:
-        return {"success": False, "error": f"The PDF could not be read. It may be corrupted or unsupported: {e}", "error_type": "CorruptedPDFError"}
+        return {"success": False, "error": f"The PDF could not be read: {e}", "error_type": "CorruptedPDFError"}
 
 
 def handle_run_tests() -> dict:

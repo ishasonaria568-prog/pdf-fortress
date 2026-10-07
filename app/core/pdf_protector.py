@@ -1,15 +1,5 @@
 """
 PDF Fortress — Core PDF Protection Engine
-ISHU CYBERSECURITY
-
-Workflow:
-1. Accept input PDF
-2. Validate document integrity & parameters
-3. Instantiate PdfWriter
-4. Copy all pages from source PDF
-5. Apply encryption
-6. Save protected PDF
-7. Verify output file & encryption state
 """
 
 import os
@@ -17,23 +7,26 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 
-# Support both vendored python_packages and standard pip environments
-_vendor_path = Path(__file__).resolve().parent.parent.parent / "python_packages"
-if _vendor_path.exists() and str(_vendor_path) not in sys.path:
-    sys.path.insert(0, str(_vendor_path))
-
+# Prioritize standard Python environment, then fallback to vendor path if needed
 try:
     from pypdf import PdfReader, PdfWriter
     from pypdf.errors import PdfReadError
 except ImportError:
+    _vendor = Path(__file__).resolve().parent.parent.parent / "python_packages"
+    if _vendor.exists() and str(_vendor) not in sys.path:
+        sys.path.insert(0, str(_vendor))
     try:
-        from PyPDF2 import PdfReader, PdfWriter
-        from PyPDF2.errors import PdfReadError
+        from pypdf import PdfReader, PdfWriter
+        from pypdf.errors import PdfReadError
     except ImportError:
-        raise ImportError(
-            "Neither 'pypdf' nor 'PyPDF2' could be loaded. "
-            "Please install dependencies with: pip install -r requirements.txt"
-        )
+        try:
+            from PyPDF2 import PdfReader, PdfWriter
+            from PyPDF2.errors import PdfReadError
+        except ImportError:
+            raise ImportError(
+                "PDF Fortress requires 'pypdf'. Please install it using:\n"
+                "    python -m pip install -r requirements.txt"
+            )
 
 from .validators import (
     validate_input_pdf,
@@ -44,8 +37,10 @@ from .validators import (
     InvalidPDFError,
     CorruptedPDFError,
     EmptyPasswordError,
-    OutputFailureError,
+    OutputFileExistsError,
     SamePathOverwriteError,
+    OutputFailureError,
+    VerificationFailureError,
 )
 
 
@@ -58,26 +53,26 @@ def verify_protected_pdf(output_path: Path, password: str) -> Dict[str, Any]:
         Dict: Information about the verified protected document.
     """
     if not output_path.exists():
-        raise OutputFailureError("Output verification failed: File was not created.")
+        raise VerificationFailureError("Output verification failed: Output file was not created.")
 
     if output_path.stat().st_size == 0:
-        raise OutputFailureError("Output verification failed: Generated PDF is empty (0 bytes).")
+        raise VerificationFailureError("Output verification failed: Generated PDF is empty (0 bytes).")
 
     try:
         reader = PdfReader(str(output_path))
     except Exception as e:
-        raise CorruptedPDFError(f"Verification failed: Output file could not be parsed as PDF: {e}")
+        raise VerificationFailureError(f"Output verification failed: Output file could not be parsed as PDF: {e}")
 
     if not reader.is_encrypted:
-        raise OutputFailureError("Verification failed: Output PDF is not encrypted.")
+        raise VerificationFailureError("Output verification failed: Output PDF is not encrypted.")
 
-    # Test decrypting with the password to guarantee the protection took effect
+    # Test decrypting with the password to guarantee protection took effect
     try:
         decrypt_result = reader.decrypt(password)
         if not decrypt_result:
-            raise OutputFailureError("Verification failed: Output file could not be unlocked with the protection password.")
+            raise VerificationFailureError("Output verification failed: Output file could not be unlocked with the protection password.")
     except Exception as e:
-        raise OutputFailureError(f"Verification failed during password decryption test: {e}")
+        raise VerificationFailureError(f"Output verification failed during password decryption test: {e}")
 
     return {
         "verified": True,
@@ -114,7 +109,7 @@ def protect_pdf(
             except Exception:
                 pass
 
-    # Stage 1: Validate input & password
+    # Stage 1: Validate input, password, and output
     report("ANALYZING DOCUMENT", 15)
     valid_input = validate_input_pdf(input_path)
     valid_password = validate_password(password)
@@ -128,7 +123,7 @@ def protect_pdf(
         if total_pages == 0:
             raise CorruptedPDFError("The PDF document contains no pages.")
     except PdfReadError as e:
-        raise CorruptedPDFError(f"The PDF could not be read. It may be corrupted or unsupported: {e}")
+        raise CorruptedPDFError(f"The PDF could not be read. It may be damaged or unsupported: {e}")
     except (MissingFileError, InvalidPDFError, CorruptedPDFError):
         raise
     except Exception as e:
@@ -180,4 +175,10 @@ def protect_pdf(
         "page_count": total_pages,
         "file_size": verification["file_size"],
         "verified": True,
+        "verification_checks": {
+            "output_exists": True,
+            "pdf_readable": True,
+            "page_count_preserved": True,
+            "protection_applied": True,
+        },
     }

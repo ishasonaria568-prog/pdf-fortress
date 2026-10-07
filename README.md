@@ -75,22 +75,27 @@ pdf_fortress/
 
 ## Installation
 
-### 1. Clone or Download
+### 1. Python Environment (Kali Linux / Debian / Ubuntu / macOS)
 
 ```bash
-git clone https://github.com/ishu-cybersecurity/pdf-fortress.git
+git clone https://github.com/ishasonaria568-prog/pdf-fortress.git
 cd pdf-fortress
 ```
 
-### 2. Install Python Dependencies
+Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-*(Note: The repository also contains pre-bundled pure-Python wheels for environments without pip).*
+*Tip for Kali Linux (PEP 668 managed environments):*
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-### 3. Run Test Suite
+### 2. Run Test Suite
 
 ```bash
 python3 -m unittest discover tests
@@ -98,47 +103,114 @@ python3 -m unittest discover tests
 
 ---
 
-## Usage
+## CLI Usage
 
-### Command-Line Interface (CLI)
+PDF Fortress includes a native, full-featured CLI engineered for Kali Linux and terminal workstations.
 
-Syntax:
-
-```bash
-python pdf_fortress.py <input_pdf> <output_pdf> "<password>"
-```
-
-Example:
+### 1. Basic Protection
 
 ```bash
-python pdf_fortress.py quarterly_audit.pdf quarterly_audit_protected.pdf "VaultPass#2026"
+python pdf_fortress.py input.pdf output.pdf "StrongPassword"
 ```
 
-Output:
-
+Terminal output:
 ```text
-[PDF FORTRESS]
-[+] Input: quarterly_audit.pdf
-[+] Reading PDF...
-[+] Applying protection...
-[+] Saving output...
-[+] Verification successful
+PDF FORTRESS
+────────────────────────────────────────
 
-[SUCCESS] PDF protected successfully.
-    Output: quarterly_audit_protected.pdf (18420 bytes, 4 pages)
-    Status: PROTECTED
+[+] Input:
+    input.pdf
+
+[+] Output:
+    output.pdf
+
+[+] Validating PDF...
+    OK
+
+[+] Reading document...
+    OK
+
+[+] Pages:
+    12
+
+[+] Applying password protection...
+    OK
+
+[+] Writing protected PDF...
+    OK
+
+[+] Verifying output...
+    OK
+
+────────────────────────────────────────
+[✓] PDF PROTECTED SUCCESSFULLY
+────────────────────────────────────────
 ```
 
-Optional flags:
-- `-f, --force`: Overwrite output file if it already exists.
-- `-v, --verbose`: Display verbose diagnostic output on error.
+### 2. Interactive Password Prompt (Secure, Hidden Input)
 
-### Web Console Interface
+```bash
+python pdf_fortress.py input.pdf output.pdf
+```
+Prompts for password and confirmation without echoing characters to the terminal.
 
-1. Start the web application:
+### 3. Standard Input (Piped / Scripting)
+
+```bash
+echo "StrongPassword" | python pdf_fortress.py input.pdf output.pdf --password-stdin
+```
+
+### 4. Overwrite Existing Output (`--force`)
+
+```bash
+python pdf_fortress.py report.pdf protected.pdf "StrongPassword" --force
+```
+
+### 5. Document Information (`--info`)
+
+Inspects metadata, structural metrics, and encryption status without modifying the file:
+
+```bash
+python pdf_fortress.py document.pdf --info
+```
+
+### 6. Protection Verification (`--verify`)
+
+Verifies the integrity and security handler status of an existing PDF:
+
+```bash
+python pdf_fortress.py protected.pdf --verify
+```
+
+### 7. Help & Version
+
+```bash
+python pdf_fortress.py --help
+python pdf_fortress.py --version
+```
+
+### CLI Exit Codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | General runtime error |
+| `2` | Invalid usage, argument mismatch, or empty password |
+| `3` | Input PDF error (missing, invalid, or corrupt) |
+| `4` | Output file error (already exists without `--force`, unwriteable, or same as input) |
+| `5` | Verification failure |
+
+---
+
+## Graphical Interface (Web Workstation)
+
+The existing graphical interface remains available separately.
+
+1. Start the workstation server:
    ```bash
    npm run dev
    ```
+2. Open `http://localhost:3000` in your browser.
 2. Open `http://localhost:3000` in your browser.
 3. Drag-and-drop any `.pdf` document or click **Try Sample PDF**.
 4. Enter your protection password and observe the real-time strength meter.

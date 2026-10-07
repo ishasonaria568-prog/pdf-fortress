@@ -1,46 +1,56 @@
 """
 PDF Fortress — Validation Module
-ISHU CYBERSECURITY
+Core Validation & Exception Classes
 """
 
 import os
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional
 
 
 class PDFProtectorError(Exception):
     """Base exception for PDF Fortress errors."""
-    pass
+    exit_code = 1
 
 
 class MissingFileError(PDFProtectorError):
     """Raised when the specified PDF file cannot be found."""
-    pass
+    exit_code = 3
 
 
 class InvalidPDFError(PDFProtectorError):
     """Raised when the file is not a valid PDF."""
-    pass
+    exit_code = 3
 
 
 class CorruptedPDFError(PDFProtectorError):
     """Raised when the PDF file is corrupted or unreadable."""
-    pass
+    exit_code = 3
 
 
 class EmptyPasswordError(PDFProtectorError):
     """Raised when an empty or whitespace-only password is provided."""
-    pass
-
-
-class SamePathOverwriteError(PDFProtectorError):
-    """Raised when input and output paths are the same without overwrite permission."""
-    pass
+    exit_code = 2
 
 
 class OutputFailureError(PDFProtectorError):
     """Raised when output file cannot be written or saved."""
-    pass
+    exit_code = 4
+
+
+class OutputFileExistsError(OutputFailureError):
+    """Raised when output file already exists without --force."""
+    exit_code = 4
+
+
+class SamePathOverwriteError(OutputFailureError):
+    """Raised when input and output paths are identical."""
+    exit_code = 4
+
+
+class VerificationFailureError(OutputFailureError):
+    """Raised when verification of the protected file fails."""
+    exit_code = 5
 
 
 def validate_input_pdf(input_path: str) -> Path:
@@ -51,16 +61,17 @@ def validate_input_pdf(input_path: str) -> Path:
     Returns:
         Path: Resolved absolute path.
     """
-    if not input_path:
-        raise MissingFileError("PDF file path cannot be empty.")
+    if not input_path or not str(input_path).strip():
+        raise MissingFileError("Input PDF does not exist.")
 
-    path = Path(input_path).resolve()
+    # Expand user home directory (~) and resolve
+    path = Path(input_path).expanduser().resolve()
 
     if not path.exists():
-        raise MissingFileError(f"PDF file not found: {path.name}")
+        raise MissingFileError(f"Input PDF does not exist: '{path.name}'")
 
     if not path.is_file():
-        raise InvalidPDFError(f"Selected target is not a file: {path.name}")
+        raise InvalidPDFError(f"The selected target is not a file: '{path.name}'")
 
     if path.suffix.lower() != ".pdf":
         raise InvalidPDFError("The selected file is not a valid PDF. Must end with .pdf extension.")
@@ -69,7 +80,7 @@ def validate_input_pdf(input_path: str) -> Path:
     try:
         size = path.stat().st_size
         if size == 0:
-            raise CorruptedPDFError("The PDF file is empty (0 bytes).")
+            raise CorruptedPDFError("The PDF could not be read. File is empty (0 bytes).")
     except OSError as e:
         raise InvalidPDFError(f"Unable to read file metadata: {e}")
 
@@ -78,35 +89,36 @@ def validate_input_pdf(input_path: str) -> Path:
         with open(path, "rb") as f:
             header = f.read(1024)
             if b"%PDF-" not in header:
-                raise InvalidPDFError("The selected file is not a valid PDF. Missing %PDF header.")
+                raise InvalidPDFError("The selected file is not a valid PDF. Missing %PDF- header.")
     except (OSError, IOError) as e:
-        raise CorruptedPDFError(f"The PDF could not be read. It may be corrupted or inaccessible: {e}")
+        raise CorruptedPDFError(f"The PDF could not be read. It may be damaged or inaccessible: {e}")
 
     return path
 
 
 def validate_output_path(output_path: str, input_path: Path, allow_overwrite: bool = False) -> Path:
     """
-    Validates output path: ensure .pdf extension, verify parent directory,
-    and prevent accidental overwrite of original input file.
+    Validates output path: ensures .pdf extension, verifies parent directory,
+    rejects same input/output unless explicitly allowed, and checks for existing output unless allow_overwrite is True.
     
     Returns:
         Path: Resolved output path.
     """
-    if not output_path:
+    if not output_path or not str(output_path).strip():
         raise OutputFailureError("Output path cannot be empty.")
 
-    out = Path(output_path).resolve()
+    out = Path(output_path).expanduser().resolve()
 
     if out.suffix.lower() != ".pdf":
         raise OutputFailureError("Output file must have a .pdf extension.")
 
-    # Prevent accidental overwrite of the source file
+    # Prevent overwriting original source file without explicit overwrite permission
     if out == input_path and not allow_overwrite:
-        raise SamePathOverwriteError(
-            "Output file cannot be identical to the original input file. "
-            "Use a different name (e.g. filename_protected.pdf) or specify overwrite permission."
-        )
+        raise SamePathOverwriteError("Input and output files must be different.")
+
+    # Check if output already exists (and is different from input)
+    if out.exists() and not allow_overwrite:
+        raise OutputFileExistsError("Output file already exists. Use --force to overwrite it.")
 
     # Check parent directory
     parent = out.parent
@@ -130,6 +142,6 @@ def validate_password(password: Optional[str]) -> str:
         str: Validated password string.
     """
     if password is None or len(password) == 0:
-        raise EmptyPasswordError("Please enter a protection password.")
+        raise EmptyPasswordError("Password cannot be empty.")
     
     return password
