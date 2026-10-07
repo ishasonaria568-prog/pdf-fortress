@@ -1,6 +1,6 @@
 """
 Tests for PDF Fortress Core Protection Engine
-ISHU CYBERSECURITY
+Built by Isha Sonaria
 """
 
 import os
@@ -9,13 +9,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Ensure vendor path or app root is in sys.path
+# Ensure app root is in sys.path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
-_vendor_path = _root / "python_packages"
-if _vendor_path.exists() and str(_vendor_path) not in sys.path:
-    sys.path.insert(0, str(_vendor_path))
 
 from pypdf import PdfWriter, PdfReader
 from app.core.pdf_protector import protect_pdf, verify_protected_pdf

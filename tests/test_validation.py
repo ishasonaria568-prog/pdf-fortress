@@ -1,14 +1,15 @@
 """
 Tests for PDF Fortress Validators
-ISHU CYBERSECURITY
+Built by Isha Sonaria
 """
 
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-# Ensure vendor path or app root is in sys.path
-import sys
+# Ensure app root is in sys.path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))

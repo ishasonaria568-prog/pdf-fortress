@@ -73,30 +73,32 @@ pdf_fortress/
 
 ---
 
-## Installation
+## Installation & Setup
 
 ### 1. Python Environment (Kali Linux / Debian / Ubuntu / macOS)
 
+Clone the repository:
 ```bash
 git clone https://github.com/ishasonaria568-prog/pdf-fortress.git
 cd pdf-fortress
 ```
 
-Install dependencies:
-
+Create and activate a virtual environment (recommended for Kali Linux and PEP 668 externally-managed environments):
 ```bash
-python -m pip install -r requirements.txt
-```
-
-*Tip for Kali Linux (PEP 668 managed environments):*
-```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
 ```
+
+Install standard dependencies via `requirements.txt`:
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+> **Dependency Architecture**: PDF Fortress relies on standard `pypdf>=4.0.0` installed into your active virtual environment or Python environment. No manual path renaming or directory modifications are required.
 
 ### 2. Run Test Suite
 
+Verify all security protections and validators:
 ```bash
 python3 -m unittest discover tests
 ```
@@ -240,4 +242,4 @@ This project demonstrates core computer science and cybersecurity engineering pr
 
 ---
 
-© 2026 ISHU CYBERSECURITY • Secure. Encrypt. Protect.
+© 2026 Isha Sonaria • Built by Isha Sonaria • Secure. Encrypt. Protect.

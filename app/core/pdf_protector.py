@@ -7,26 +7,15 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 
-# Prioritize standard Python environment, then fallback to vendor path if needed
+# Import pypdf from the installed Python environment (virtual environment / site-packages)
 try:
     from pypdf import PdfReader, PdfWriter
     from pypdf.errors import PdfReadError
-except ImportError:
-    _vendor = Path(__file__).resolve().parent.parent.parent / "python_packages"
-    if _vendor.exists() and str(_vendor) not in sys.path:
-        sys.path.insert(0, str(_vendor))
-    try:
-        from pypdf import PdfReader, PdfWriter
-        from pypdf.errors import PdfReadError
-    except ImportError:
-        try:
-            from PyPDF2 import PdfReader, PdfWriter
-            from PyPDF2.errors import PdfReadError
-        except ImportError:
-            raise ImportError(
-                "PDF Fortress requires 'pypdf'. Please install it using:\n"
-                "    python -m pip install -r requirements.txt"
-            )
+except ImportError as err:
+    raise ImportError(
+        "PDF Fortress requires 'pypdf'. Please install it using:\n"
+        "    python -m pip install -r requirements.txt"
+    ) from err
 
 from .validators import (
     validate_input_pdf,

@@ -1,5 +1,6 @@
 """
 Tests for PDF Fortress Native CLI Interface
+Built by Isha Sonaria
 """
 
 import os
@@ -10,9 +11,8 @@ import subprocess
 from pathlib import Path
 
 _root = Path(__file__).resolve().parent.parent
-_vendor = _root / "python_packages"
-if _vendor.exists() and str(_vendor) not in sys.path:
-    sys.path.insert(0, str(_vendor))
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 
 from pypdf import PdfWriter
 

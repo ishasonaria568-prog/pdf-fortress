@@ -1,6 +1,6 @@
 /**
  * PDF Fortress — Local Server
- * ISHU CYBERSECURITY
+ * Built by Isha Sonaria
  * 
  * Express backend running locally on port 3000 with Vite middlewares.
  * Strict local processing — zero cloud uploads, zero telemetry, no password logging.
