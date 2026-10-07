@@ -1,0 +1,6 @@
+{
+  "name": "PDF Fortress — Ishu Cybersecurity",
+  "description": "Secure, encrypt, and protect PDF documents with password encryption. Built by Ishu Cybersecurity with local-only processing and zero cloud uploads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
